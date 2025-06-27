@@ -96,7 +96,7 @@ const App: React.FC = () => {
         },
         resultats: {
             plusValue: `+ ${(capitalFinal - capitalInitial).toLocaleString('fr-FR', {style: 'currency', currency: 'EUR', maximumFractionDigits: 0})}`,
-            decote: `${((1 - TABLE_DECOTE[dureeDemenbrement]) * 100).toFixed(0)}%`
+            decote: `${((1 - (TABLE_DECOTE[dureeDemenbrement] || 0.60)) * 100).toFixed(0)}%`
         }
     };
 
@@ -171,7 +171,7 @@ const App: React.FC = () => {
                 <div className="text-center">
                     <h2 className="text-2xl font-semibold text-[#00FFD2] mb-4">Votre Gain Potentiel</h2>
                     <p className="text-gray-300 mb-6">
-                        En investissant en nue-propriété sur <span className="font-bold text-white">{dureeDemenbrement} ans</span>, vous bénéficiez d'une décote de <span className="font-bold text-white">{((1 - TABLE_DECOTE[dureeDemenbrement]) * 100).toFixed(0)}%</span>.
+                        En investissant en nue-propriété sur <span className="font-bold text-white">{dureeDemenbrement} ans</span>, vous bénéficiez d'une décote de <span className="font-bold text-white">{((1 - (TABLE_DECOTE[dureeDemenbrement] || 0.60)) * 100).toFixed(0)}%</span>.
                     </p>
                     
                     <div className="bg-emerald-100 p-6 rounded-lg text-center shadow">
@@ -243,9 +243,151 @@ const App: React.FC = () => {
             </div>
         </div>
         
+        {/* Disclaimer Section */}
+        <div className="text-center mt-10">
+             <div className="text-xs text-slate-400 p-4 bg-slate-900/50 rounded-lg max-w-3xl mx-auto">
+                <h3 className="font-semibold text-slate-300 mb-2">Hypothèses de calcul</h3>
+                <p>La décote appliquée est une moyenne de marché et peut varier. La plus-value mécanique est calculée hors revalorisation potentielle du prix de la part. Cette simulation est non contractuelle et ne constitue pas un conseil en investissement.</p>
+            </div>
+        </div>
+        
       </div>
     </div>
   );
 };
 
 export default App;
+```
+
+
+```javascript
+// Fichier : netlify/functions/send-simulation.js
+// Version corrigée et étendue pour gérer tous les thèmes de simulateurs
+
+const { Resend } = require('resend');
+
+// --- Helper function to format the main body of the email based on the theme ---
+function getEmailBody(theme, data) {
+    const { objectifs, resultats } = data;
+    const commonFooter = `
+        <p style="margin-top: 25px;">Pour discuter de ces résultats et mettre en place la stratégie la plus adaptée, n'hésitez pas à nous contacter.</p>
+        <br>
+        <p>Cordialement,</p>
+        <p><strong>L'équipe Aeternia Patrimoine</strong></p>
+    `;
+
+    if (theme === 'Démembrement') {
+        return `
+            <h3 style="color: #333;">Vos paramètres :</h3>
+            <ul style="list-style-type: none; padding-left: 0; border-left: 3px solid #00FFD2; padding-left: 15px;">
+                <li><strong>Durée du démembrement :</strong> ${objectifs.dureeDemenbrement}</li>
+                <li><strong>Capital initial investi (en nue-propriété) :</strong> ${objectifs.capitalInitial}</li>
+                <li><strong>Capital final récupéré (en pleine propriété) :</strong> ${objectifs.capitalFinal}</li>
+            </ul>
+
+            <h3 style="color: #333;">Résultats de votre projet :</h3>
+            <div style="background-color: #f7f7f7; border-radius: 8px; padding: 20px; text-align: center;">
+                <p style="margin: 0; font-size: 16px;">Grâce à une décote de <strong>${resultats.decote}</strong>, la plus-value mécanique à terme est de :</p>
+                <p style="font-size: 24px; font-weight: bold; color: #00877a; margin: 10px 0;">${resultats.plusValue}</p>
+                <p style="font-size: 14px; color: #555; margin: 0;">Ce gain est réalisé sans fiscalité supplémentaire au moment de la récupération de la pleine propriété.</p>
+            </div>
+            ${commonFooter}
+        `;
+    }
+
+    // Default template for all other simulators
+    const emailTemplates = {
+        'default': { title: "le résumé de votre simulation", objectiveLabel: "Revenu mensuel souhaité" },
+        'Aider un proche': { title: "le résumé de votre projet d'aide financière", objectiveLabel: "Aide mensuelle à verser" },
+        'Études enfant': { title: "le résumé de votre projet pour les études de votre enfant", objectiveLabel: "Revenu mensuel pour ses études" },
+        'Retraite': { title: "le résumé de votre projet de retraite", objectiveLabel: "Revenu mensuel souhaité à la retraite" },
+        'Année sabbatique': { title: "le résumé de votre projet d'année sabbatique", objectiveLabel: "Budget mensuel nécessaire" },
+        'Revenu Passif': { title: "le résumé de votre projet d'indépendance financière", objectiveLabel: "Revenu passif mensuel souhaité" }
+    };
+    const template = emailTemplates[theme] || emailTemplates['default'];
+
+    return `
+        <h3 style="color: #333;">Vos paramètres :</h3>
+        <ul style="list-style-type: none; padding-left: 0; border-left: 3px solid #00FFD2; padding-left: 15px;">
+            <li><strong>${template.objectiveLabel} :</strong> ${objectifs.revenuRecherche}</li>
+            <li><strong>Durée de l'épargne :</strong> ${objectifs.dureePlacement}</li>
+            <li><strong>Votre apport initial :</strong> ${objectifs.versementInitial}</li>
+        </ul>
+
+        <h3 style="color: #333;">Résultats de votre projet :</h3>
+        <div style="background-color: #f7f7f7; border-radius: 8px; padding: 20px; text-align: center;">
+            <p style="margin: 0; font-size: 16px;">Pour atteindre votre objectif, votre effort d'épargne mensuel suggéré est de :</p>
+            <p style="font-size: 24px; font-weight: bold; color: #00877a; margin: 10px 0;">${resultats.versementMensuelRequis} / mois</p>
+            <p style="font-size: 14px; color: #555; margin: 0;">Cet effort vous permettrait de viser un capital final de <strong>${resultats.capitalVise}</strong>.</p>
+        </div>
+        ${commonFooter}
+    `;
+}
+
+exports.handler = async function(event) {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
+  }
+
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const body = JSON.parse(event.body);
+    
+    const { email, data, theme } = body;
+
+    // --- Data validation ---
+    if (!data || typeof data.objectifs === 'undefined' || typeof data.resultats === 'undefined') {
+        console.error("Données de simulation manquantes ou mal formatées :", body);
+        return {
+            statusCode: 400,
+            body: JSON.stringify({ error: "Données de simulation invalides." }),
+        };
+    }
+    
+    const emailSubjects = {
+        'default': `Votre simulation d'épargne Aeternia Patrimoine`,
+        'Aider un proche': `Votre simulation pour aider un proche`,
+        'Études enfant': `Votre simulation pour les études de votre enfant`,
+        'Retraite': `Votre simulation de retraite complémentaire`,
+        'Année sabbatique': `Votre simulation pour votre année sabbatique`,
+        'Revenu Passif': `Votre simulation d'indépendance financière`,
+        'Démembrement': `Votre simulation d'investissement en démembrement`
+    };
+
+    const subject = emailSubjects[theme] || emailSubjects['default'];
+    const emailBodyHtml = getEmailBody(theme, data);
+
+    await resend.emails.send({
+      from: 'Aeternia Patrimoine <contact@aeterniapatrimoine.fr>', 
+      to: [email],
+      bcc: ['contact@aeterniapatrimoine.fr'],
+      subject: subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px;">
+          <h2 style="color: #333;">Bonjour,</h2>
+          <p>Merci d'avoir utilisé notre simulateur.</p>
+          
+          ${emailBodyHtml}
+          
+          <hr style="border: none; border-top: 1px solid #eee; margin-top: 20px;">
+          
+          <p style="font-size: 10px; color: #777; text-align: center; margin-top: 20px;">
+            Les informations et résultats fournis par ce simulateur sont donnés à titre indicatif et non contractuel. Ils sont basés sur les hypothèses de calcul et les paramètres que vous avez renseignés et ne constituent pas un conseil en investissement.
+          </p>
+        </div>
+      `,
+    });
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'Email envoyé avec succès !' }),
+    };
+
+  } catch (error) {
+    console.error("Erreur dans la fonction Netlify :", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Une erreur est survenue lors de l'envoi de l'email." }),
+    };
+  }
+};
